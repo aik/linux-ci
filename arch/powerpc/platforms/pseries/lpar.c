@@ -1830,8 +1830,11 @@ void hcall_tracepoint_unregfunc(void)
 
 /*
  * Since the tracing code might execute hcalls we need to guard against
- * recursion. H_CONFER from spin locks must be treated separately though
- * and use _notrace plpar_hcall variants, see yield_to_preempted().
+ * recursion, but this always seems risky -- __trace_hcall_entry might be
+ * ftraced, for example. So warn in this case.
+ *
+ * H_CONFER from spin locks must be treated separately though and use _notrace
+ * plpar_hcall variants, see yield_to_preempted().
  */
 static DEFINE_PER_CPU(unsigned int, hcall_trace_depth);
 
@@ -1845,7 +1848,7 @@ notrace void __trace_hcall_entry(unsigned long opcode, unsigned long *args)
 
 	depth = this_cpu_ptr(&hcall_trace_depth);
 
-	if (*depth)
+	if (WARN_ON_ONCE(*depth))
 		goto out;
 
 	(*depth)++;
@@ -1866,7 +1869,7 @@ notrace void __trace_hcall_exit(long opcode, long retval, unsigned long *retbuf)
 
 	depth = this_cpu_ptr(&hcall_trace_depth);
 
-	if (*depth)
+	if (*depth) /* Don't warning again on the way out */
 		goto out;
 
 	(*depth)++;
